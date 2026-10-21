@@ -37,21 +37,22 @@
         const VDS_IP = '45.143.11.78'; 
 
         // PeerJS Sunucusuna (Docker) ve Coturn (TURN/STUN) Sunucusuna Bağlanıyoruz
-        const peer = new Peer({
-            host: VDS_IP,
-            port: 9000,
-            path: '/',
-            config: {
-                iceServers: [
-                    { urls: `stun:${VDS_IP}:3478` },
-                    {
-                        urls: `turn:${VDS_IP}:3478`,
-                        username: 'mete', // Coturn'de oluşturduğun kullanıcı adı
-                        credential: '684424'      // Coturn'de oluşturduğun şifre
-                    }
-                ]
-            }
-        });
+		const peer = new Peer({
+			host: 'ssh2.demirtola.net', // Kendi aldığın domain
+			port: 9000,
+			secure: true,               // WSS / HTTPS aktif!
+			path: '/',
+			config: {
+				iceServers: [
+					{ urls: 'stun:ssh2.demirtola.net:3478' }, // Veya VDS IP adresin
+					{
+						urls: 'turn:ssh2.demirtola.net:3478',
+						username: 'mete', // Coturn kullanıcı adın
+						credential: '684424'      // Coturn şifren
+					}
+				]
+			}
+		});
 
         let localStream;
         const localVideo = document.getElementById('local-video');
