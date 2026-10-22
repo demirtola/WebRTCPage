@@ -2,66 +2,60 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Basit WebRTC Video Odası</title>
-    <!-- PeerJS Kütüphanesi -->
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; margin-top: 30px; background: #f0f2f5; }
-        .container { background: white; padding: 20px; border-radius: 10px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 600px; }
-        video { width: 45%; background: black; border-radius: 8px; margin: 5px; border: 2px solid #ddd; }
-        input, button { padding: 10px; font-size: 16px; margin: 5px; border-radius: 5px; border: 1px solid #ccc; }
-        button { background: #007bff; color: white; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        #my-id { font-weight: bold; color: #28a745; }
-    </style>
+    <title>Görüntülü Arama Testi</title>
 </head>
 <body>
-
-    <div class="container">
-        <h2>WebRTC Video Konferans</h2>
-        <p>Senin Peer ID'in: <span id="my-id">Bağlanıyor...</span></p>
-        
-        <div>
-            <input type="text" id="call-id" placeholder="Aranacak Kişinin ID'si">
-            <button id="call-btn">Görüntülü Ara</button>
-        </div>
-
-        <div style="margin-top: 20px;">
-            <video id="local-video" autoplay muted playsinline></video>
-            <video id="remote-video" autoplay playsinline></video>
-        </div>
+    <div>
+        <input type="text" id="call-id" placeholder="Aranacak Kişinin ID'si">
+        <button id="call-btn">Görüntülü Ara</button>
     </div>
 
-    <script>
-        // VDS Bilgilerini Buraya Giriyoruz
-        const VDS_IP = '45.143.11.78'; 
+    <div style="margin-top: 20px;">
+        <video id="local-video" autoplay muted playsinline></video>
+        <video id="remote-video" autoplay playsinline></video>
+    </div>
 
-        // PeerJS Sunucusuna (Docker) ve Coturn (TURN/STUN) Sunucusuna Bağlanıyoruz
-		const peer = new Peer({
-			host: 'ssh2.demirtola.net', // Kendi aldığın domain
-			port: 9000,
-			secure: true,               // WSS / HTTPS aktif!
-			path: '/',
-			config: {
-				iceServers: [
-					{ urls: 'stun:ssh2.demirtola.net:3478' }, // Veya VDS IP adresin
-					{
-						urls: 'turn:ssh2.demirtola.net:3478',
-						username: 'mete', // Coturn kullanıcı adın
-						credential: '684424'      // Coturn şifren
-					},
-					{
-						urls: 'turn:vds.demirtola.net:3478',
-						username: 'mete', // Coturn kullanıcı adın
-						credential: '684424'      // Coturn şifren
-					}
-				]
-			}
-		});
+    <!-- PeerJS Kütüphanesini Eklemeyi Unutma -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script>
+        // PeerJS Sunucusuna (Docker - vds.demirtola.net) ve Coturn (TURN/STUN) Sunucusuna Bağlanıyoruz
+        const peer = new Peer({
+            host: 'vds.demirtola.net', 
+            port: 9000,
+            secure: true,              // WSS / HTTPS aktif!
+            path: '/',
+            config: {
+                iceServers: [
+                    { urls: 'stun:vds.demirtola.net:3478' },
+                    {
+                        urls: 'turn:vds.demirtola.net:3478',
+                        username: 'mete', 
+                        credential: '684424'      
+                    },
+                    {
+                        urls: 'turn:ssh2.demirtola.net:3478', // İstersen bunu da tutabilirsin
+                        username: 'mete', 
+                        credential: '684424'      
+                    }
+                ]
+            }
+        });
 
         let localStream;
         const localVideo = document.getElementById('local-video');
         const remoteVideo = document.getElementById('remote-video');
+
+        // Bağlantı başarılı olduğunda (Eskiden aldığın kod burada dönecek)
+        peer.on('open', (id) => {
+            console.log('Peer başarıyla bağlandı. ID:', id);
+            alert('Signal sunucusuna bağlandı! Peer ID: ' + id);
+        });
+
+        // Hata durumunu yakalamak için
+        peer.on('error', (err) => {
+            console.error('PeerJS Hatası:', err);
+            alert('Bağlantı Hatası: ' + err.type);
+        });
 
         // 1. Kendi Kameramızı ve Mikrofonumuzu Açıyoruz
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
@@ -73,33 +67,6 @@
                 console.error('Kamera hatası:', err);
                 alert('Kamera ve mikrofon izni vermelisiniz!');
             });
-
-        // 2. Peer Sunucusuna Bağlantı Başarılı Olunca ID'mizi Ekrana Yazdırıyoruz
-        peer.on('open', id => {
-            document.getElementById('my-id').innerText = id;
-        });
-
-        // 3. Biri bizi aradığında otomatik yanıt verip kameramızı gönderiyoruz
-        peer.on('call', call => {
-            call.answer(localStream);
-            call.on('stream', remoteStream => {
-                remoteVideo.srcObject = remoteStream;
-            });
-        });
-
-        // 4. "Ara" butonuna basıldığında karşı tarafı arama
-        document.getElementById('call-btn').addEventListener('click', () => {
-            const targetId = document.getElementById('call-id').value;
-            if (!targetId) {
-                alert('Lütfen bağlanılacak ID girin!');
-                return;
-            }
-
-            const call = peer.call(targetId, localStream);
-            call.on('stream', remoteStream => {
-                remoteVideo.srcObject = remoteStream;
-            });
-        });
     </script>
 </body>
 </html>
