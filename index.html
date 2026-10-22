@@ -3,37 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <title>Görüntülü Arama Testi</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 30px; }
+        video { width: 40%; max-width: 400px; margin: 10px; border: 2px solid #ccc; background: #000; border-radius: 8px; }
+    </style>
 </head>
 <body>
     <div>
+        <h3>Benim ID'm: <span id="my-id" style="color: blue;">Bağlanıyor...</span></h3>
         <input type="text" id="call-id" placeholder="Aranacak Kişinin ID'si">
         <button id="call-btn">Görüntülü Ara</button>
     </div>
 
     <div style="margin-top: 20px;">
-        <video id="local-video" autoplay muted playsinline></video>
-        <video id="remote-video" autoplay playsinline></video>
+        <div>
+            <span>Kendi Kameram</span><br>
+            <video id="local-video" autoplay muted playsinline></video>
+        </div>
+        <div>
+            <span>Karşı Taraf</span><br>
+            <video id="remote-video" autoplay playsinline></video>
+        </div>
     </div>
 
-    <!-- PeerJS Kütüphanesini Eklemeyi Unutma -->
+    <!-- PeerJS Kütüphanesi -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
-        // PeerJS Sunucusuna (Docker - vds.demirtola.net) ve Coturn (TURN/STUN) Sunucusuna Bağlanıyoruz
-        const peer = new Peer({
+        const ozelId = "mete-" + Math.floor(Math.random() * 1000);
+        
+        // PeerJS Sunucusuna Bağlanıyoruz
+        const peer = new Peer(ozelId, {
             host: 'vds.demirtola.net', 
             port: 9000,
-            secure: true,              // WSS / HTTPS aktif!
+            secure: true,              
             path: '/',
             config: {
                 iceServers: [
                     { urls: 'stun:vds.demirtola.net:3478' },
                     {
                         urls: 'turn:vds.demirtola.net:3478',
-                        username: 'mete', 
-                        credential: '684424'      
-                    },
-                    {
-                        urls: 'turn:ssh2.demirtola.net:3478', // İstersen bunu da tutabilirsin
                         username: 'mete', 
                         credential: '684424'      
                     }
@@ -45,18 +53,6 @@
         const localVideo = document.getElementById('local-video');
         const remoteVideo = document.getElementById('remote-video');
 
-        // Bağlantı başarılı olduğunda (Eskiden aldığın kod burada dönecek)
-        peer.on('open', (id) => {
-            console.log('Peer başarıyla bağlandı. ID:', id);
-            alert('Signal sunucusuna bağlandı! Peer ID: ' + id);
-        });
-
-        // Hata durumunu yakalamak için
-        peer.on('error', (err) => {
-            console.error('PeerJS Hatası:', err);
-            alert('Bağlantı Hatası: ' + err.type);
-        });
-
         // 1. Kendi Kameramızı ve Mikrofonumuzu Açıyoruz
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
             .then(stream => {
@@ -67,6 +63,60 @@
                 console.error('Kamera hatası:', err);
                 alert('Kamera ve mikrofon izni vermelisiniz!');
             });
+
+        // Bağlantı başarılı olduğunda
+        peer.on('open', (id) => {
+            console.log('Peer başarıyla bağlandı. ID:', id);
+            document.getElementById('my-id').innerText = id; // Ekrana da yazdıralım
+        });
+
+        // Hata durumunu yakalamak için
+        peer.on('error', (err) => {
+            console.error('PeerJS Hatası:', err);
+            alert('Bağlantı Hatası: ' + err.type);
+        });
+
+        // 2. BİRİ BİZİ ARADIĞINDA (Gelen Çağrı)
+        peer.on('call', (call) => {
+            console.log('Biri sizi arıyor...');
+            // Gelen çağrıyı kendi kameramızla (localStream) yanıtlıyoruz
+            call.answer(localStream);
+
+            // Karşı tarafın görüntüsünü kendi remote-video elementimize bağlıyoruz
+            call.on('stream', (remoteStream) => {
+                remoteVideo.srcObject = remoteStream;
+            });
+        });
+
+        // 3. "GÖRÜNTÜLÜ ARA" BUTONUNA BASILDIĞINDA (Arama Yapma)
+        document.getElementById('call-btn').addEventListener('click', () => {
+            const targetId = document.getElementById('call-id').value.trim();
+            
+            if (!targetId) {
+                alert('Lütfen aranacak kişinin ID sini girin!');
+                return;
+            }
+
+            console.log(targetId + ' aranıyor...');
+            
+            // Karşı tarafın ID'si ve kendi kameramızla (localStream) arama başlatıyoruz
+            const call = peer.call(targetId, localStream);
+
+            if (!call) {
+                alert('Arama başlatılamadı!');
+                return;
+            }
+
+            // Karşı taraf aramayı kabul edip kendi görüntüsünü gönderdiğinde tetiklenir
+            call.on('stream', (remoteStream) => {
+                remoteVideo.srcObject = remoteStream;
+            });
+
+            call.on('error', (err) => {
+                console.error('Arama hatası:', err);
+                alert('Arama sırasında hata oluştu.');
+            });
+        });
     </script>
 </body>
 </html>
